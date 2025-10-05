@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{SITE_NAME}}</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background-color: #f0f0f0; }
+    #audioPlayer { display: none; }
+    #playButton { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    #statusText { margin-top: 10px; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h1>{{SITE_NAME}}</h1>
+  <audio id="audioPlayer" controls></audio>
+  <button id="playButton">Play Stream</button>
+  <div id="statusText">Tap Play to Start</div>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12"></script>
+  <script>
+    const audio = document.getElementById('audioPlayer');
+    const button = document.getElementById('playButton');
+    const status = document.getElementById('statusText');
+    const streamUrl = '{{STREAM_URL}}';
+    let hls;
+
+    function initStream() {
+      if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+        audio.src = streamUrl;
+        audio.addEventListener('loadedmetadata', () => {
+          audio.muted = false;
+          audio.play().then(() => {
+            button.textContent = 'Mute Stream';
+            status.textContent = '🔴 Live Now';
+          }).catch(() => {
+            button.textContent = 'Play Stream';
+            status.textContent = 'Tap Play to Start';
+          });
+        });
+        audio.addEventListener('error', (e) => {
+          console.error('Native HLS Error:', e);
+          status.textContent = '❌ Stream Error';
+        });
+      } else if (Hls.isSupported()) {
+        hls = new Hls({
+          maxBufferLength: 5,
+          maxBufferHole: 0.5,
+          maxSeekHole: 0.5,
+          liveSyncDuration: 1,
+          liveMaxLatencyDuration: 2,
+          lowLatencyMode: true,
+          backBufferLength: 0,
+          enableWorker: false,
+          autoStartLoad: true
+        });
+        hls.loadSource(streamUrl);
+        hls.attachMedia(audio);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          audio.muted = false;
+          audio.play().then(() => {
+            button.textContent = 'Mute Stream';
+            status.textContent = '🔴 Live Now';
+          }).catch(() => {
+            button.textContent = 'Play Stream';
+            status.textContent = 'Tap Play to Start';
+          });
+        });
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error('HLS Error:', data);
+          if (data.fatal) {
+            status.textContent = '❌ Stream Error - Retrying...';
+            hls.recoverMediaError();
+          } else if (data.details === 'bufferStalledError') {
+            status.textContent = '🔴 Buffering...';
+            hls.startLoad();
+            setTimeout(() => { status.textContent = '🔴 Live Now'; }, 200);
+          }
+        });
+      } else {
+        status.textContent = '❌ Your browser does not support HLS';
+      }
+    }
+
+    button.addEventListener('click', () => {
+      if (audio.paused) {
+        audio.play();
+        audio.muted = false;
+        button.textContent = 'Mute Stream';
+        status.textContent = '🔴 Live Now';
+      } else {
+        audio.muted = !audio.muted;
+        button.textContent = audio.muted ? 'Unmute Stream' : 'Mute Stream';
+        status.textContent = audio.muted ? '🔇 Muted' : '🔴 Live Now';
+      }
+    });
+
+    initStream();
+  </script>
+</body>
+</html>
